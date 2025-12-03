@@ -453,7 +453,7 @@ ADZUNA_API_KEY          # Job board search
 ### Key Dependencies
 - `ai` (5.0.44+): AI SDK with tool calling and streaming
 - `@ai-sdk/openai`, `@ai-sdk/react`: OpenAI integration and React hooks
-- `@modelcontextprotocol/sdk`: MCP client for Firecrawl
+- `@modelcontextprotocol/sdk` (1.18.2+): MCP client with Streamable HTTP transport for Firecrawl
 - `@elevenlabs/elevenlabs-js` (2.22.0): ElevenLabs SDK for Speech-to-Text
 - `@supabase/supabase-js` (2.75+): Supabase JavaScript client
 - `@supabase/ssr` (0.7+): Supabase SSR utilities for Next.js
@@ -510,9 +510,10 @@ ADZUNA_API_KEY          # Job board search
 - Progressive display pattern: Scrape → Parse → displayJobs → Repeat
 
 ### 4. Web Scraping Integration with Progressive Display
-- MCP client implementation for Firecrawl
-- Dynamic tool discovery and execution
-- Handles scraping errors gracefully
+- MCP client implementation for Firecrawl using Streamable HTTP transport (MCP v3)
+- Migrated from deprecated SSE to modern Streamable HTTP protocol (January 2025)
+- Dynamic tool discovery and execution via `@modelcontextprotocol/sdk` 1.18.2+
+- Handles scraping errors gracefully with automatic fallback
 - Combines multiple sources (scraping + API)
 - **Progressive display architecture**: displayJobs tool bridges Firecrawl's raw HTML to UI
 - Real-time carousel updates as jobs are parsed (~0.05ms per batch)

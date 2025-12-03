@@ -1,7 +1,10 @@
 /**
- * Firecrawl MCP Client using SSE Transport
+ * Firecrawl MCP Client using Streamable HTTP Transport (MCP v3)
  * Documentation: https://docs.firecrawl.dev/mcp-server
  * AI SDK MCP Integration: https://ai-sdk.dev/cookbook/node/mcp-tools
+ *
+ * Note: Migrated from SSE to Streamable HTTP transport in January 2025
+ * following Firecrawl's MCP server upgrade to MCP v3 protocol.
  */
 
 import { experimental_createMCPClient } from "ai";
