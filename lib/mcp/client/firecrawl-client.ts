@@ -5,7 +5,7 @@
  */
 
 import { experimental_createMCPClient } from "ai";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { MCPClientConfig } from "./types";
 
 export class FirecrawlMCPClient {
@@ -19,7 +19,7 @@ export class FirecrawlMCPClient {
   constructor(config: MCPClientConfig) {
     this.apiKey = config.apiKey;
     this.serverUrl =
-      config.serverUrl || `https://mcp.firecrawl.dev/${config.apiKey}/v2/sse`;
+      config.serverUrl || `https://mcp.firecrawl.dev/${config.apiKey}/v2/mcp`;
   }
 
   /**
@@ -32,9 +32,11 @@ export class FirecrawlMCPClient {
     }
 
     try {
-      console.log("🚀 Connecting to Firecrawl MCP server via SSE...");
+      console.log("🚀 Connecting to Firecrawl MCP server via Streamable HTTP...");
 
-      const transport = new SSEClientTransport(new URL(this.serverUrl));
+      const transport = new StreamableHTTPClientTransport(
+        new URL(this.serverUrl)
+      );
 
       this.client = await experimental_createMCPClient({
         transport,
