@@ -23,7 +23,8 @@ This is a TypeScript Next.js 15 application with AI-powered job search and match
 
 ### Core Stack
 
-- **Next.js 15** with App Router and Turbopack for fast builds
+- **Next.js 15.5.7** with App Router and Turbopack for fast builds (updated for CVE-2025-66478 security patch)
+- **React 19.1.2** (updated for CVE-2025-55182 security patch)
 - **AI SDK 5** with OpenAI GPT-5 integration
 - **MCP (Model Context Protocol)** with Firecrawl for web scraping
 - **Adzuna API** for job board searches
@@ -185,20 +186,29 @@ const result = streamText({
 This application uses MCP (Model Context Protocol) to integrate Firecrawl web scraping tools:
 
 - **Location**: MCP client code is in `/lib/mcp/`
+- **Transport**: Streamable HTTP transport (MCP v3) via `StreamableHTTPClientTransport`
+- **Endpoint**: `https://mcp.firecrawl.dev/{API_KEY}/v2/mcp`
+- **SDK Version**: `@modelcontextprotocol/sdk` 1.18.2+
 - **Dynamic Loading**: Tools are loaded at runtime from the Firecrawl MCP server
 - **Current MCP Tools**: Firecrawl provides web scraping and content extraction capabilities
 - **Tool Wrapping**: Tools are wrapped with logging to monitor execution
 - **Error Handling**: Firecrawl connection failures are caught gracefully - agents continue without MCP tools if unavailable
 
-Example from `/app/api/agent-with-mcp-tools/route.ts`:
+Example from `/lib/mcp/client/firecrawl-client.ts`:
 
 ```typescript
-// Initialize Firecrawl MCP client
-const firecrawlClient = getFirecrawlMCPClient();
-await firecrawlClient.connect();
+import { experimental_createMCPClient } from "ai";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+// Initialize Firecrawl MCP client with Streamable HTTP transport
+const transport = new StreamableHTTPClientTransport(
+  new URL(`https://mcp.firecrawl.dev/${apiKey}/v2/mcp`)
+);
+
+const client = await experimental_createMCPClient({ transport });
 
 // Retrieve Firecrawl tools
-const tools = await firecrawlClient.getTools();
+const tools = await client.tools();
 
 // Wrap tools to log when they are called
 const wrappedTools = Object.fromEntries(
@@ -217,6 +227,8 @@ const wrappedTools = Object.fromEntries(
   ])
 );
 ```
+
+**Note**: As of January 2025, Firecrawl migrated from the deprecated SSE transport to Streamable HTTP transport (MCP v3). This provides more stable and feature-rich communication with better support for streaming and server-to-client notifications.
 
 #### Custom Tools Implemented
 

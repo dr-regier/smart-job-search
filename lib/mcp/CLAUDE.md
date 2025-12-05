@@ -15,16 +15,32 @@ https://ai-sdk.dev/cookbook/node/mcp-tools
 This documentation covers:
 
 - How to create MCP clients with AI SDK
-- SSE, stdio, and HTTP transport options
+- Streamable HTTP, stdio, and transport options
 - Tool retrieval and combination patterns
 - Integration with `generateText()` and `streamText()`
 - Best practices for MCP client management
+
+### MCP Protocol Specification
+
+https://modelcontextprotocol.io/specification/2025-03-26/basic/transports
+
+Official MCP transport documentation including Streamable HTTP transport details.
+
+## Current Implementation
+
+This project uses **Streamable HTTP transport (MCP v3)** for connecting to Firecrawl's MCP server:
+
+- **Transport**: `StreamableHTTPClientTransport` from `@modelcontextprotocol/sdk/client/streamableHttp.js`
+- **Endpoint**: `https://mcp.firecrawl.dev/{API_KEY}/v2/mcp`
+- **SDK Version**: `@modelcontextprotocol/sdk` 1.18.2+
+
+**Migration Note**: As of January 2025, the deprecated SSE transport was replaced with Streamable HTTP transport following Firecrawl's upgrade to MCP v3.
 
 ## Usage Pattern
 
 1. Read the documentation links above before making changes
 2. Follow the existing patterns in `/lib/mcp/client/`
-3. Use SSE transport for hosted MCP servers
+3. Use **Streamable HTTP transport** for hosted MCP servers (current standard)
 4. Always handle errors and add logging
 5. Load credentials from environment variables
 

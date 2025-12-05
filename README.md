@@ -83,6 +83,7 @@ An intelligent job search and matching system powered by multi-agent AI architec
 - **Row Level Security (RLS)** - User data isolation at database level
 - **Email + Google OAuth** - Secure authentication with multiple providers
 - **TypeScript** - Full type safety across the entire application
+- **Next.js 15.5.7 & React 19.1.2** - Latest security patches applied (CVE-2025-66478, CVE-2025-55182)
 - **shadcn/ui Design System** - Clean, modern UI components with custom animations
 - **Responsive Design** - Mobile-first approach that scales beautifully to desktop
 - **Form Validation** - react-hook-form with Zod schemas for type-safe forms
