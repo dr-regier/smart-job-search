@@ -117,72 +117,144 @@ export const searchAdzunaJobs = {
       console.error("❌ Adzuna API credentials not found");
       return {
         action: "error",
-        error: "Adzuna API credentials are not configured. Please add ADZUNA_APP_ID and ADZUNA_API_KEY to your environment variables.",
+        error: "Adzuna API credentials are not configured. Please add ADZUNA_APP_ID and ADZUNA_APP_KEY to your environment variables.",
         jobs: [],
       };
     }
 
-    try {
-      // Build API URL
-      const baseUrl = "https://api.adzuna.com/v1/api/jobs/us/search/1";
-      const params = new URLSearchParams({
-        app_id: appId,
-        app_key: apiKey,
-        results_per_page: resultsCount.toString(),
-        what: query,
-      });
+    // Build API URL
+    const baseUrl = "https://api.adzuna.com/v1/api/jobs/us/search/1";
+    const params = new URLSearchParams({
+      app_id: appId,
+      app_key: apiKey,
+      results_per_page: resultsCount.toString(),
+      what: query,
+    });
 
-      if (location) {
-        params.append("where", location);
-      }
+    if (location) {
+      params.append("where", location);
+    }
 
-      const url = `${baseUrl}?${params.toString()}`;
+    const url = `${baseUrl}?${params.toString()}`;
 
-      console.log(`📡 Fetching from Adzuna API...`);
+    console.log(`📡 Adzuna API request: ${baseUrl}`);
+    console.log(`   Location: ${location || 'any'}, Results: ${resultsCount}`);
 
-      // Make API request
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+    // Retry configuration
+    const maxRetries = 3;
+    const timeout = 10000; // 10 seconds
+    let lastError: any;
 
-      if (!response.ok) {
-        console.error(`❌ Adzuna API error: ${response.status} ${response.statusText}`);
+    // Retry loop with exponential backoff
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        try {
+          // Make API request with timeout
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": "AI-Job-Search-Agent/1.0 (Next.js)",
+            },
+            signal: controller.signal,
+          });
+
+          // Clear timeout on successful response
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            console.error(`❌ Adzuna API error: ${response.status} ${response.statusText}`);
+            return {
+              action: "error",
+              error: `Adzuna API returned error: ${response.status} ${response.statusText}`,
+              jobs: [],
+            };
+          }
+
+          const data: AdzunaResponse = await response.json();
+
+          console.log(`✅ Adzuna returned ${data.results.length} jobs (attempt ${attempt})`);
+
+          // Map Adzuna jobs to our Job interface
+          const jobs: Job[] = data.results.map(mapAdzunaJobToJob);
+
+          return {
+            action: "display",
+            jobs,
+            count: jobs.length,
+            query,
+            location: location || "all locations",
+            message: `Found ${jobs.length} jobs matching "${query}"${location ? ` in ${location}` : ""}`,
+          };
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          throw fetchError;
+        }
+      } catch (error: any) {
+        lastError = error;
+
+        // Extract error code from error or nested cause
+        const errorCode = error.code || error.cause?.code;
+        const errorName = error.name;
+
+        // Handle specific error types
+        if (errorName === 'AbortError') {
+          console.error(`⏱️ Adzuna API timeout after ${timeout / 1000} seconds (attempt ${attempt}/${maxRetries})`);
+
+          // Retry on timeout
+          if (attempt < maxRetries) {
+            const delay = Math.pow(2, attempt - 1) * 1000;
+            console.log(`⚠️ Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+
+          return {
+            action: "error",
+            error: `Adzuna API request timed out after ${maxRetries} attempts`,
+            jobs: [],
+          };
+        }
+
+        // Check for network errors (including nested in cause)
+        if (errorCode === 'ETIMEDOUT' || errorCode === 'ECONNRESET' || errorCode === 'ECONNREFUSED') {
+          console.error(`🔌 Network error: ${errorCode} (attempt ${attempt}/${maxRetries})`);
+
+          // Retry on network errors
+          if (attempt < maxRetries) {
+            const delay = Math.pow(2, attempt - 1) * 1000;
+            console.log(`⚠️ Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+
+          return {
+            action: "error",
+            error: `Network error connecting to Adzuna: ${errorCode}`,
+            jobs: [],
+          };
+        }
+
+        // For other errors, don't retry
+        console.error("💥 Adzuna tool error:", error);
         return {
           action: "error",
-          error: `Adzuna API returned error: ${response.status} ${response.statusText}`,
+          error: error instanceof Error ? error.message : "An unexpected error occurred while searching Adzuna",
           jobs: [],
         };
       }
-
-      const data: AdzunaResponse = await response.json();
-
-      console.log(`✅ Adzuna returned ${data.results.length} jobs`);
-
-      // Map Adzuna jobs to our Job interface
-      const jobs: Job[] = data.results.map(mapAdzunaJobToJob);
-
-      return {
-        action: "display",
-        jobs,
-        count: jobs.length,
-        query,
-        location: location || "all locations",
-        message: `Found ${jobs.length} jobs matching "${query}"${location ? ` in ${location}` : ""}`,
-      };
-    } catch (error) {
-      console.error("💥 Adzuna tool error:", error);
-
-      return {
-        action: "error",
-        error:
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred while searching Adzuna",
-        jobs: [],
-      };
     }
+
+    // All retries exhausted
+    console.error(`💥 All ${maxRetries} retry attempts failed`);
+    return {
+      action: "error",
+      error: lastError instanceof Error ? lastError.message : "Failed to fetch jobs from Adzuna after multiple retries",
+      jobs: [],
+    };
   },
 };
