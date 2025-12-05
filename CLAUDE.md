@@ -23,7 +23,8 @@ This is a TypeScript Next.js 15 application with AI-powered job search and match
 
 ### Core Stack
 
-- **Next.js 15** with App Router and Turbopack for fast builds
+- **Next.js 15.5.7** with App Router and Turbopack for fast builds (updated for CVE-2025-66478 security patch)
+- **React 19.1.2** (updated for CVE-2025-55182 security patch)
 - **AI SDK 5** with OpenAI GPT-5 integration
 - **MCP (Model Context Protocol)** with Firecrawl for web scraping
 - **Adzuna API** for job board searches

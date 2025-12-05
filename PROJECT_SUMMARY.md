@@ -20,7 +20,7 @@ Job seekers spend 10-20+ hours per week manually searching for positions across 
 
 ### Core Stack
 
-- **Frontend**: Next.js 15, React 19, TypeScript
+- **Frontend**: Next.js 15.5.7 (security patched), React 19.1.2 (security patched), TypeScript
 - **AI/ML**: AI SDK 5 (Vercel), OpenAI GPT-5
 - **Backend**: Supabase (PostgreSQL database, Authentication, Storage)
 - **Integrations**:
@@ -463,8 +463,9 @@ ADZUNA_API_KEY          # Job board search
 - `@hookform/resolvers`: Integration between react-hook-form and validation libraries
 - `uuid`: Unique job ID generation
 - `zod` (4.1.11): Schema validation for tool inputs and forms
-- `next` (15.5.3): React framework with App Router
-- `react` (19.1.0): UI library
+- `next` (15.5.7): React framework with App Router (CVE-2025-66478 patched)
+- `react` (19.1.2): UI library (CVE-2025-55182 patched)
+- `react-dom` (19.1.2): React DOM renderer (CVE-2025-55182 patched)
 - `tailwindcss` (v4): Styling with custom animations
 - `shadcn/ui`: Component library (Radix UI primitives including AlertDialog)
 - `lucide-react`: Icon library (RotateCcw, Trash2, etc.)
@@ -792,4 +793,4 @@ const allRawMessages = React.useMemo(() => {
 
 ---
 
-*Last updated: January 2025*
+*Last updated: December 2025 - Security patches applied for CVE-2025-66478 (Next.js) and CVE-2025-55182 (React)*
