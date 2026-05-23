@@ -116,7 +116,7 @@ An intelligent job search and matching system powered by multi-agent AI architec
    FIRECRAWL_API_KEY=your_firecrawl_api_key_here
    ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
    ADZUNA_APP_ID=your_adzuna_app_id_here
-   ADZUNA_API_KEY=your_adzuna_api_key_here
+   ADZUNA_APP_KEY=your_adzuna_app_key_here
 
    # Supabase Configuration
    NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co

@@ -458,7 +458,7 @@ pnpm tsc --noEmit     # Type check (required after changes)
 OPENAI_API_KEY          # GPT-5 for agent reasoning
 FIRECRAWL_API_KEY       # Web scraping for career pages
 ADZUNA_APP_ID           # Job board search
-ADZUNA_API_KEY          # Job board search
+ADZUNA_APP_KEY          # Job board search
 ```
 
 ### Key Dependencies
