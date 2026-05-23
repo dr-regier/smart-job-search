@@ -45,5 +45,14 @@ next-env.d.ts
 # folders just for my local use
 /Specs
 
+# local planning docs (keep private)
+/SPECIFICATION.md
+/IMPROVEMENT_PLAN.md
+/STATE_OF_THE_APP.md
+/notes.md
+
+# PDF-export spike (redundant with app code; contains personal resume data)
+/spikes/
+
 
 

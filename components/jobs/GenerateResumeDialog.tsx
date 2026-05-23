@@ -21,9 +21,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Download, Sparkles, CheckCircle, AlertCircle } from "lucide-react";
+import { Copy, Download, Sparkles, CheckCircle, AlertCircle, FileDown } from "lucide-react";
 import type { Job } from "@/types/job";
 import type { Resume } from "@/types/resume";
+import { downloadResumePdf, resumePdfFilename } from "@/lib/pdf/download-resume-pdf";
 
 interface GenerateResumeDialogProps {
   job: Job | null;
@@ -44,6 +45,7 @@ export function GenerateResumeDialog({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<any>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   // Use refs to store current values for the transport (avoid stale closure)
   const selectedResumeIdRef = useRef<string>("");
@@ -317,6 +319,21 @@ export function GenerateResumeDialog({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadPdf = async () => {
+    if (!generatedResume?.tailoredResume?.content || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      await downloadResumePdf(
+        generatedResume.tailoredResume.content,
+        resumePdfFilename(job?.company, job?.title)
+      );
+    } catch (err) {
+      console.error("Failed to generate PDF:", err);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   const handleRegenerate = () => {
     setGeneratedResume(null);
     handleGenerate();
@@ -543,7 +560,17 @@ export function GenerateResumeDialog({
                       className="text-xs"
                     >
                       <Download className="w-3 h-3 mr-1" />
-                      Download
+                      .md
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleDownloadPdf}
+                      disabled={pdfBusy}
+                      className="text-xs"
+                    >
+                      <FileDown className="w-3 h-3 mr-1" />
+                      {pdfBusy ? "Building…" : "PDF"}
                     </Button>
                   </div>
                 </div>
