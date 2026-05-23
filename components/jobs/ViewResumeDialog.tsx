@@ -11,8 +11,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Copy, Download, CheckCircle, AlertCircle, FileText } from "lucide-react";
+import { Copy, Download, CheckCircle, AlertCircle, FileText, FileDown } from "lucide-react";
 import type { Job } from "@/types/job";
+import { downloadResumePdf, resumePdfFilename } from "@/lib/pdf/download-resume-pdf";
 
 interface ViewResumeDialogProps {
   job: Job | null;
@@ -26,6 +27,7 @@ export function ViewResumeDialog({
   onOpenChange,
 }: ViewResumeDialogProps) {
   const [copySuccess, setCopySuccess] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const handleCopy = async () => {
     if (!job?.tailoredResume?.content) return;
@@ -53,6 +55,21 @@ export function ViewResumeDialog({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!job?.tailoredResume?.content || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      await downloadResumePdf(
+        job.tailoredResume.content,
+        resumePdfFilename(job.company, job.title)
+      );
+    } catch (err) {
+      console.error("Failed to generate PDF:", err);
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   if (!job || !job.tailoredResume) return null;
@@ -158,7 +175,17 @@ export function ViewResumeDialog({
                   className="text-xs"
                 >
                   <Download className="w-3 h-3 mr-1" />
-                  Download
+                  .md
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDownloadPdf}
+                  disabled={pdfBusy}
+                  className="text-xs"
+                >
+                  <FileDown className="w-3 h-3 mr-1" />
+                  {pdfBusy ? "Building…" : "PDF"}
                 </Button>
               </div>
             </div>
