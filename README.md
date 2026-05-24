@@ -33,7 +33,7 @@ An intelligent job search and matching system powered by multi-agent AI architec
 - **Intelligent Job Scoring** - Weighted scoring system (0-100) with detailed reasoning and gap analysis
 - **AI-Powered Resume Tailoring** - Generate customized resumes for specific jobs using GPT-5 with optimized completion tracking
 - **Natural Language Commands** - Find, save, and score jobs through conversation
-- **AI Elements Components** - Rich UI components for tool calls, reasoning, and structured outputs
+- **AI Elements Components** - Rich UI components for tool calls and structured outputs
 - **Vercel Deployment Ready** - Serverless-compatible with proper context handling
 
 ### User Interface
@@ -83,7 +83,7 @@ An intelligent job search and matching system powered by multi-agent AI architec
 - **Row Level Security (RLS)** - User data isolation at database level
 - **Email + Google OAuth** - Secure authentication with multiple providers
 - **TypeScript** - Full type safety across the entire application
-- **Next.js 15.5.7 & React 19.1.2** - Latest security patches applied (CVE-2025-66478, CVE-2025-55182)
+- **Next.js 15.5.18 & React 19.1.2** - Latest security patches applied
 - **shadcn/ui Design System** - Clean, modern UI components with custom animations
 - **Responsive Design** - Mobile-first approach that scales beautifully to desktop
 - **Form Validation** - react-hook-form with Zod schemas for type-safe forms
@@ -230,7 +230,7 @@ Navigate to the Jobs Dashboard (`/jobs`):
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        Browser UI (Chat + Pages)                         │
-│  - AI Elements components (Conversation, Message, Tool, Reasoning)       │
+│  - AI Elements components (Conversation, Message, Tool)                  │
 │  - useChat hook for streaming                                            │
 │  - Supabase for persistence with Row Level Security                     │
 └───┬────────────────────────────┬─────────────────────────┬───────────────┘
