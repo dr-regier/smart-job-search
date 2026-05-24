@@ -9,12 +9,26 @@
 import { RESUME_GENERATOR_SYSTEM_PROMPT } from "@/components/agent/prompts";
 import { generateTailoredResumeTool, getResumeGenerationContext } from "@/components/agent/tools";
 import { getFirecrawlMCPClient } from "@/lib/mcp";
+import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/supabase/queries";
 import { openai } from "@ai-sdk/openai";
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
+    // Get user from Supabase auth
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log("❌ Authentication failed");
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     const { messages, jobId, masterResumeId, job, masterResume } = await request.json();
 
     console.log('\n' + '═'.repeat(60));
@@ -66,7 +80,8 @@ export async function POST(request: NextRequest) {
 
     // Get context for resume generation (job details + master resume + profile)
     console.log('\n📋 Building context for resume generation...');
-    const context = getResumeGenerationContext(job, masterResume);
+    const profile = await getProfile(supabase, user.id);
+    const context = getResumeGenerationContext(job, masterResume, profile);
 
     if (context.startsWith('Error:')) {
       console.log(`❌ ${context}`);

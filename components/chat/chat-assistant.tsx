@@ -43,11 +43,6 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
-import {
-  Reasoning,
-  ReasoningTrigger,
-  ReasoningContent,
-} from "@/components/ai-elements/reasoning";
 import { Response } from "@/components/ai-elements/response";
 import { JobCarousel } from "@/components/jobs/JobCarousel";
 import { Button } from "@/components/ui/button";
@@ -172,7 +167,7 @@ const MemoizedMessage = memo(({
   isStreaming: boolean;
   children?: React.ReactNode;
 }) => {
-  // Only handle text parts (reasoning is now handled as separate flow items)
+  // Only handle text parts
   const textParts = message.parts?.filter((p: any) => p.type === 'text') || [];
 
   return (
@@ -370,9 +365,9 @@ export default function ChatAssistant({}: ChatAssistantProps) {
             />
           ) : (
             (() => {
-              // Extract flow items (messages + tool calls + reasoning) in chronological order
+              // Extract flow items (messages + tool calls) in chronological order
               const flowItems: Array<{
-                type: 'message' | 'tool-call' | 'reasoning';
+                type: 'message' | 'tool-call';
                 data: any;
                 id: string;
                 messageId?: string;
@@ -403,15 +398,6 @@ export default function ChatAssistant({}: ChatAssistantProps) {
                       messageId: message.id,
                       agentSource,
                       toolName,
-                      partIndex
-                    });
-                  } else if (part.type === 'reasoning') {
-                    // Handle reasoning parts
-                    flowItems.push({
-                      type: 'reasoning',
-                      data: part,
-                      id: `reasoning-${message.id}-${partIndex}`,
-                      messageId: message.id,
                       partIndex
                     });
                   }
@@ -461,21 +447,6 @@ export default function ChatAssistant({}: ChatAssistantProps) {
                         text={displayInfo.text}
                         toolPart={toolPart}
                       />
-                    </div>
-                  );
-                } else if (item.type === 'reasoning') {
-                  // Render reasoning block
-                  const reasoningPart = item.data;
-
-                  return (
-                    <div key={item.id} className="w-full mb-4">
-                      <Reasoning
-                        isStreaming={isLoading}
-                        className="mb-4"
-                      >
-                        <ReasoningTrigger />
-                        <ReasoningContent>{reasoningPart.text || ''}</ReasoningContent>
-                      </Reasoning>
                     </div>
                   );
                 } else {

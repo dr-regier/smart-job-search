@@ -5,11 +5,24 @@
  * Accepts audio files from the browser and returns transcript text.
  */
 
+import { createClient } from "@/lib/supabase/server";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
+    // Get user from Supabase auth
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log("❌ Authentication failed");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     // Check for API key
     if (!process.env.ELEVENLABS_API_KEY) {
       console.error("❌ ELEVENLABS_API_KEY not configured");
