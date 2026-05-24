@@ -6,9 +6,9 @@
  */
 
 import { z } from "zod";
-import { getProfile } from "@/lib/storage/profile";
 import type { Job } from "@/types/job";
 import type { Resume } from "@/types/resume";
+import type { UserProfile } from "@/types/profile";
 
 /**
  * Generate Tailored Resume Tool
@@ -147,15 +147,15 @@ export const generateTailoredResumeTool = {
  * This is called at the beginning of the agent conversation to provide
  * all necessary context for resume generation.
  *
- * Note: This function is called server-side, so it receives job and resume
- * objects directly instead of fetching from localStorage (which is client-only).
+ * Note: This function is called server-side, so it receives the job, resume,
+ * and user profile directly (the profile is fetched from Supabase in the route)
+ * instead of reading from localStorage (which is client-only).
  */
 export function getResumeGenerationContext(
   job: Job,
-  masterResume: Resume
+  masterResume: Resume,
+  userProfile: UserProfile | null
 ): string {
-  const userProfile = getProfile();
-
   if (!job) {
     return `Error: Job data is required. Please provide job details.`;
   }

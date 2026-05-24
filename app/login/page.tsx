@@ -62,7 +62,7 @@ export default function LoginPage() {
                 },
               },
             }}
-            providers={["google"]}
+            providers={["google", "github"]}
             redirectTo={`${window.location.origin}/auth/callback`}
             theme="light"
           />

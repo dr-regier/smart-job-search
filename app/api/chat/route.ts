@@ -9,12 +9,25 @@
 import { JOB_DISCOVERY_SYSTEM_PROMPT } from "@/components/agent/prompts";
 import { searchAdzunaJobs, saveJobsToProfile, displayJobs } from "@/components/agent/tools";
 import { getFirecrawlMCPClient } from "@/lib/mcp";
+import { createClient } from "@/lib/supabase/server";
 import { openai } from "@ai-sdk/openai";
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
+    // Get user from Supabase auth
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log("❌ Authentication failed");
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     const { messages } = await request.json();
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -116,7 +129,6 @@ export async function POST(request: NextRequest) {
         openai: {
           reasoning_effort: "minimal",
           textVerbosity: "low",
-          reasoningSummary: "auto",
         },
       },
     });
