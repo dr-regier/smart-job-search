@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Current Focus
+
+Active work lives in two docs - read them before building or planning:
+- `SPECIFICATION.md` - what we're building (source of truth for features)
+- `IMPROVEMENT_PLAN.md` - why/process, decision log, what's next
+
+Other root docs (STATE_OF_THE_APP, PROJECT_SUMMARY, README) are reference - read on demand, not every session.
+
 ## Development Commands
 
 - `pnpm dev` - Start development server with Turbopack
