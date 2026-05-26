@@ -9,6 +9,7 @@
 import { JOB_DISCOVERY_SYSTEM_PROMPT } from "@/components/agent/prompts";
 import { searchAdzunaJobs, saveJobsToProfile, displayJobs } from "@/components/agent/tools";
 import { getFirecrawlMCPClient } from "@/lib/mcp";
+import { buildDiscoveryContext } from "@/lib/agent/discovery-context";
 import { createClient } from "@/lib/supabase/server";
 import { openai } from "@ai-sdk/openai";
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
@@ -35,6 +36,11 @@ export async function POST(request: NextRequest) {
     }
 
     const modelMessages = convertToModelMessages(messages);
+
+    // Assemble user context (profile + saved jobs + master resume) so the agent
+    // searches with situational awareness instead of running blind keyword
+    // searches. See lib/agent/discovery-context.ts.
+    const userContext = await buildDiscoveryContext(supabase, user.id);
 
     // Initialize Firecrawl MCP client
     console.log("🚀 Initializing Firecrawl MCP client for Job Discovery Agent...");
@@ -121,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     const result = streamText({
       model: openai("gpt-5"),
-      system: JOB_DISCOVERY_SYSTEM_PROMPT,
+      system: `${JOB_DISCOVERY_SYSTEM_PROMPT}\n\n${userContext}`,
       messages: modelMessages,
       tools: allTools,
       stopWhen: stepCountIs(10), // Allow up to 10 tool calls for discovery

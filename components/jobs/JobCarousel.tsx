@@ -29,10 +29,23 @@ export function JobCarousel({ jobs, onJobSaved, onComplete, onClose }: JobCarous
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
   const [direction, setDirection] = useState<1 | -1>(1); // For animation direction
 
-  const currentJob = jobs[currentIndex];
-  const isLastJob = currentIndex === jobs.length - 1;
-  const isFirstJob = currentIndex === 0;
+  // The jobs array shrinks underneath us when saved jobs are removed from the
+  // session, which can leave currentIndex past the end. Clamp defensively so we
+  // never render an undefined job (was crashing with "Cannot read properties of
+  // undefined (reading 'id')" when the queue was exhausted).
+  const safeIndex = jobs.length > 0 ? Math.min(currentIndex, jobs.length - 1) : 0;
+  const currentJob = jobs[safeIndex];
+  const isLastJob = safeIndex === jobs.length - 1;
+  const isFirstJob = safeIndex === 0;
   const totalJobs = jobs.length;
+
+  // Keep state in sync when the clamp kicks in, so navigation and the counter
+  // operate on the corrected index.
+  useEffect(() => {
+    if (safeIndex !== currentIndex) {
+      setCurrentIndex(safeIndex);
+    }
+  }, [safeIndex, currentIndex]);
 
   /**
    * Handle saving a job
@@ -68,18 +81,15 @@ export function JobCarousel({ jobs, onJobSaved, onComplete, onClose }: JobCarous
         duration: 3000,
       });
 
-      // Notify parent
+      // Notify parent. This removes the saved job from the carousel array, which
+      // shifts the next job into the current index on its own - so we must NOT
+      // also advance, or we'd skip that next job.
       onJobSaved(job);
 
-      // Move to next job after a brief delay for user feedback
-      setTimeout(() => {
-        if (!isLastJob) {
-          handleNext();
-        } else {
-          // All jobs processed
-          onComplete();
-        }
-      }, 300);
+      // If that was the last job in the queue, we're done.
+      if (isLastJob) {
+        setTimeout(onComplete, 300);
+      }
     } catch (error) {
       console.error("Failed to save job:", error);
       toast.error("Save failed", {
@@ -278,7 +288,7 @@ export function JobCarousel({ jobs, onJobSaved, onComplete, onClose }: JobCarous
               <h3 className="text-sm font-semibold">Discovered Jobs</h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              Job {currentIndex + 1} of {totalJobs}
+              Job {safeIndex + 1} of {totalJobs}
             </p>
           </div>
 
