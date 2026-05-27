@@ -49,6 +49,14 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
+/**
+ * Ceiling on how many jobs the carousel ever shows at once. Discovery can dump
+ * far more (it stacks across searches and Adzuna returns up to 50/call), so we
+ * keep only the top-ranked slice. The rest stay in the backlog and refill the
+ * visible queue as the user saves/skips. Tunable.
+ */
+const MAX_CAROUSEL_JOBS = 25;
+
 export function ChatProvider({
   children,
   api = '/api/chat'
@@ -278,7 +286,12 @@ export function ChatProvider({
    * signals/profile load.
    */
   const carouselJobs = useMemo(
-    () => dedupeAndRankJobs(sessionJobs, { signals: jobSignals, profile: userProfile }),
+    () =>
+      dedupeAndRankJobs(sessionJobs, {
+        signals: jobSignals,
+        profile: userProfile,
+        limit: MAX_CAROUSEL_JOBS,
+      }),
     [sessionJobs, jobSignals, userProfile]
   );
 

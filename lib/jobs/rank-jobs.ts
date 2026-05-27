@@ -70,18 +70,26 @@ function clamp(value: number, min: number, max: number): number {
 interface RankInputs {
   signals: JobSignal[];
   profile: UserProfile | null;
+  /**
+   * Optional ceiling on the returned list. Because the result is ranked
+   * best-first, capping keeps the strongest matches and drops the weak tail -
+   * this is the deterministic enforcement of "show ~20, not 194" that the
+   * discovery prompt's prose never actually guaranteed. Omit for no cap.
+   */
+  limit?: number;
 }
 
 /**
- * Collapse duplicate listings and order the result best-first.
+ * Collapse duplicate listings and order the result best-first, optionally
+ * capped to a ceiling.
  *
- * Non-destructive in spirit: nothing is dropped except true duplicates, so the
- * full deduped set is returned - the user simply sees the strongest matches
- * first and can stop early.
+ * Duplicates are always dropped. Beyond that, only the weakest-ranked tail is
+ * trimmed when `limit` is set - and since the carousel keeps the unshown
+ * backlog, the visible queue refills from it as the user saves/skips.
  */
 export function dedupeAndRankJobs(
   jobs: Job[],
-  { signals, profile }: RankInputs
+  { signals, profile, limit }: RankInputs
 ): Job[] {
   // --- 1. Dedup: keep the first job seen per (title, company) key ---
   const seen = new Map<string, Job>();
@@ -142,8 +150,11 @@ export function dedupeAndRankJobs(
   };
 
   // --- 4. Stable sort by score desc (preserve original order on ties) ---
-  return deduped
+  const ranked = deduped
     .map((job, index) => ({ job, index, score: score(job) }))
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((entry) => entry.job);
+
+  // --- 5. Cap to the ceiling, if set (best-first, so the tail is the weakest) ---
+  return typeof limit === "number" ? ranked.slice(0, limit) : ranked;
 }
