@@ -198,6 +198,7 @@ export default function ChatAssistant({}: ChatAssistantProps) {
     sessionJobs,
     clearSessionJobs,
     removeJobFromSession,
+    logJobSignal,
     refreshSavedJobs,
     carouselVisible,
     setCarouselVisible,
@@ -333,10 +334,17 @@ export default function ChatAssistant({}: ChatAssistantProps) {
 
   // Handlers for JobCarousel
   const handleJobSaved = (job: Job) => {
+    // Capture the save as a preference signal (Bet B), fire-and-forget
+    logJobSignal("saved", job);
     // Remove job from carousel after saving
     removeJobFromSession(job.id);
     // Refresh saved jobs list
     refreshSavedJobs();
+  };
+
+  const handleJobSkipped = (job: Job) => {
+    // Capture an explicit skip as a preference signal (Bet B), fire-and-forget
+    logJobSignal("skipped", job);
   };
 
   const handleCarouselComplete = () => {
@@ -573,6 +581,7 @@ export default function ChatAssistant({}: ChatAssistantProps) {
             <JobCarousel
               jobs={sessionJobs}
               onJobSaved={handleJobSaved}
+              onJobSkipped={handleJobSkipped}
               onComplete={handleCarouselComplete}
               onClose={handleCarouselClose}
             />
