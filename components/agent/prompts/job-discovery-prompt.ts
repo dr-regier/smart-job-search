@@ -176,6 +176,10 @@ already-saved jobs, and their master resume. Use it on every search:
   hard gate. If strict matching leaves too few results, broaden and say so.
 - **Graceful when context is thin.** If there's no profile or resume yet, search
   normally and gently suggest completing the profile for sharper results.
+- **Use preference signals if present.** A "Recent preference signals" section may
+  list roles the user just saved vs. skipped in the carousel. Lean toward roles
+  resembling their saves and de-prioritize ones resembling their skips. These are
+  soft hints, not hard rules - never let them shrink results to nothing.
 
 ## Important Notes
 

@@ -93,6 +93,30 @@ CREATE TABLE IF NOT EXISTS resumes (
 );
 
 -- =====================================================
+-- JOB_SIGNALS TABLE
+-- Captures the user's save/skip decisions from the discovery carousel as a
+-- lightweight preference signal (Bet B). Separate from `jobs` because skipped
+-- jobs never become `jobs` rows. Stores a self-contained snapshot.
+-- =====================================================
+CREATE TABLE IF NOT EXISTS job_signals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  -- The decision: explicit save or explicit skip (plain nav does NOT count)
+  signal TEXT NOT NULL CHECK (signal IN ('saved', 'skipped')),
+
+  -- Job snapshot at the moment of the decision (the posting may never be saved)
+  title TEXT NOT NULL,
+  company TEXT NOT NULL,
+  location TEXT,
+  requirements TEXT[] NOT NULL DEFAULT '{}',
+  url TEXT,
+  source TEXT,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =====================================================
 -- INDEXES FOR PERFORMANCE
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
@@ -100,6 +124,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_application_status ON jobs(user_id, applicat
 CREATE INDEX IF NOT EXISTS idx_jobs_priority ON jobs(user_id, priority);
 CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(user_id, score DESC);
 CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);
+CREATE INDEX IF NOT EXISTS idx_job_signals_user_created ON job_signals(user_id, created_at DESC);
 
 -- =====================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -110,6 +135,7 @@ CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resumes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_signals ENABLE ROW LEVEL SECURITY;
 
 -- PROFILES POLICIES
 CREATE POLICY "Users can view their own profile"
@@ -160,6 +186,23 @@ CREATE POLICY "Users can update their own resumes"
 
 CREATE POLICY "Users can delete their own resumes"
   ON resumes FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- JOB_SIGNALS POLICIES
+CREATE POLICY "Users can view their own job signals"
+  ON job_signals FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own job signals"
+  ON job_signals FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own job signals"
+  ON job_signals FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own job signals"
+  ON job_signals FOR DELETE
   USING (auth.uid() = user_id);
 
 -- =====================================================

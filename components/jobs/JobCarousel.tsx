@@ -12,6 +12,7 @@ import { toast } from "sonner";
 interface JobCarouselProps {
   jobs: Job[];
   onJobSaved: (job: Job) => void;
+  onJobSkipped?: (job: Job) => void; // Explicit skip (button/Esc), NOT plain nav
   onComplete: () => void;
   onClose?: () => void; // Optional close button callback
 }
@@ -23,7 +24,7 @@ interface JobCarouselProps {
  * Shows one job at a time with navigation, immediate save functionality,
  * and progress tracking.
  */
-export function JobCarousel({ jobs, onJobSaved, onComplete, onClose }: JobCarouselProps) {
+export function JobCarousel({ jobs, onJobSaved, onJobSkipped, onComplete, onClose }: JobCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
@@ -101,9 +102,14 @@ export function JobCarousel({ jobs, onJobSaved, onComplete, onClose }: JobCarous
   };
 
   /**
-   * Handle skipping a job (just navigate to next)
+   * Handle skipping a job. An explicit skip (this button or Esc) is a preference
+   * signal - log it before navigating. Plain Prev/Next navigation does NOT count
+   * as a skip (avoids noise from paging back and forth).
    */
   const handleSkip = () => {
+    if (currentJob) {
+      onJobSkipped?.(currentJob);
+    }
     if (!isLastJob) {
       handleNext();
     } else {

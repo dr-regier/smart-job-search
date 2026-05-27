@@ -26,6 +26,7 @@ interface ChatContextType {
   refreshUserProfile: () => void;
   clearSessionJobs: () => void;
   removeJobFromSession: (jobId: string) => void;
+  logJobSignal: (signal: "saved" | "skipped", job: Job) => void;
 
   // Carousel visibility control
   carouselVisible: boolean;
@@ -250,6 +251,22 @@ export function ChatProvider({
   };
 
   /**
+   * Record a save/skip preference signal (Bet B). Fire-and-forget: a failed
+   * write must never block or break carousel UX, so we don't await it and
+   * swallow errors.
+   */
+  const logJobSignal = (signal: "saved" | "skipped", job: Job) => {
+    fetch("/api/jobs/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ signal, job }),
+    }).catch((error) => {
+      console.error("Failed to log job signal:", error);
+    });
+  };
+
+  /**
    * Clear all chat history and reset to fresh state
    * Preserves saved jobs and profile data
    */
@@ -331,6 +348,7 @@ export function ChatProvider({
     refreshUserProfile,
     clearSessionJobs,
     removeJobFromSession,
+    logJobSignal,
     carouselVisible,
     setCarouselVisible,
     messageOrderRef,
