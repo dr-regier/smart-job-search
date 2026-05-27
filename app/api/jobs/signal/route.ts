@@ -8,9 +8,39 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { recordJobSignal } from "@/lib/supabase/queries";
+import { recordJobSignal, getJobSignals } from "@/lib/supabase/queries";
 import type { Job } from "@/types/job";
 import { NextResponse } from "next/server";
+
+/**
+ * GET /api/jobs/signal
+ * Returns the user's recent save/skip signals, used client-side to dedup + rank
+ * the discovery carousel.
+ */
+export async function GET() {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const signals = await getJobSignals(supabase, user.id);
+
+    return NextResponse.json({ signals });
+  } catch (error) {
+    console.error("Job signal GET API error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request: Request) {
   try {

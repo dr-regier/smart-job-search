@@ -1,11 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { createClient } from "@/lib/supabase/client";
 import type { Job } from "@/types/job";
 import type { UserProfile } from "@/types/profile";
+import type { JobSignal } from "@/lib/supabase/queries/job-signals";
+import { dedupeAndRankJobs, jobDedupeKey } from "@/lib/jobs/rank-jobs";
 
 interface ChatContextType {
   // Discovery Agent chat instance
@@ -20,7 +22,8 @@ interface ChatContextType {
 
   // Jobs and profile state
   savedJobs: Job[];
-  sessionJobs: Job[]; // Discovered jobs not yet saved (for carousel)
+  sessionJobs: Job[]; // Discovered jobs not yet saved (raw, for carousel)
+  carouselJobs: Job[]; // sessionJobs deduped + ranked for display
   userProfile: UserProfile | null;
   refreshSavedJobs: () => void;
   refreshUserProfile: () => void;
@@ -46,6 +49,14 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
+/**
+ * Ceiling on how many jobs the carousel ever shows at once. Discovery can dump
+ * far more (it stacks across searches and Adzuna returns up to 50/call), so we
+ * keep only the top-ranked slice. The rest stay in the backlog and refill the
+ * visible queue as the user saves/skips. Tunable.
+ */
+const MAX_CAROUSEL_JOBS = 25;
+
 export function ChatProvider({
   children,
   api = '/api/chat'
@@ -57,6 +68,7 @@ export function ChatProvider({
   const [savedJobs, setSavedJobs] = useState<Job[]>([]);
   const [sessionJobs, setSessionJobs] = useState<Job[]>([]); // Discovered jobs for carousel
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [jobSignals, setJobSignals] = useState<JobSignal[]>([]); // recent save/skip, for ranking
   const [activeAgent, setActiveAgent] = useState<'discovery' | 'matching'>('discovery');
   const [userId, setUserId] = useState<string | null>(null);
   const [carouselVisible, setCarouselVisible] = useState<boolean>(true); // Open by default
@@ -66,6 +78,12 @@ export function ChatProvider({
   const messageOrderRef = useRef<Map<string, number>>(new Map());
   const nextOrderRef = useRef(0);
   const processedToolCallsRef = useRef<Set<string>>(new Set());
+
+  // True when the next batch of displayed jobs should REPLACE the carousel (a
+  // new search began) rather than append to it. Set when a user message is sent;
+  // cleared by the first display of that turn so the agent's progressive batches
+  // still accumulate within the same search.
+  const pendingSearchResetRef = useRef(false);
 
   const supabase = createClient();
 
@@ -92,6 +110,17 @@ export function ChatProvider({
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
           setUserProfile(profileData.profile);
+        }
+
+        // Recent save/skip signals power the carousel dedup + ranking. Loaded
+        // once on mount (not live per-skip) so the queue stays stable during a
+        // review session; new skips influence the next session.
+        const signalsResponse = await fetch('/api/jobs/signal', {
+          credentials: 'include',
+        });
+        if (signalsResponse.ok) {
+          const signalsData = await signalsResponse.json();
+          setJobSignals(signalsData.signals || []);
         }
       }
     };
@@ -179,15 +208,24 @@ export function ChatProvider({
           // Handle jobs discovery (action: "display")
           if (toolOutput.action === 'display' && toolOutput.jobs && Array.isArray(toolOutput.jobs)) {
             console.log(`🎯 Displaying ${toolOutput.jobs.length} jobs in carousel`);
-            // Add jobs to sessionJobs, deduplicating by ID
-            setSessionJobs((prevJobs) => {
-              const existingIds = new Set(prevJobs.map(j => j.id));
-              const newJobs = toolOutput.jobs.filter((job: Job) => !existingIds.has(job.id));
-              if (newJobs.length > 0) {
-                console.log(`   Added ${newJobs.length} new jobs (${prevJobs.length} → ${prevJobs.length + newJobs.length})`);
-              }
-              return [...prevJobs, ...newJobs];
-            });
+            if (pendingSearchResetRef.current) {
+              // First display of a new search: replace the previous results so a
+              // new search doesn't pile onto the last one's carousel.
+              pendingSearchResetRef.current = false;
+              console.log(`   🔄 New search - replacing carousel with ${toolOutput.jobs.length} jobs`);
+              setSessionJobs(toolOutput.jobs);
+            } else {
+              // Subsequent progressive batches within the same search: accumulate,
+              // deduplicating by ID.
+              setSessionJobs((prevJobs) => {
+                const existingIds = new Set(prevJobs.map(j => j.id));
+                const newJobs = toolOutput.jobs.filter((job: Job) => !existingIds.has(job.id));
+                if (newJobs.length > 0) {
+                  console.log(`   Added ${newJobs.length} new jobs (${prevJobs.length} → ${prevJobs.length + newJobs.length})`);
+                }
+                return [...prevJobs, ...newJobs];
+              });
+            }
             // Show carousel when jobs are discovered
             setCarouselVisible(true);
           }
@@ -240,15 +278,37 @@ export function ChatProvider({
   };
 
   /**
-   * Remove a specific job from session jobs (when user saves it)
+   * Remove a job from session jobs (when user saves it). Group-aware: also drops
+   * any collapsed duplicates that share its dedup key, so saving the displayed
+   * representative doesn't let a sibling repost resurface in the carousel.
    */
   const removeJobFromSession = (jobId: string) => {
     setSessionJobs((prevJobs) => {
-      const filtered = prevJobs.filter(job => job.id !== jobId);
-      console.log(`🗑️ Removed job ${jobId} from session (${prevJobs.length} → ${filtered.length})`);
+      const target = prevJobs.find((job) => job.id === jobId);
+      const targetKey = target ? jobDedupeKey(target) : null;
+      const filtered = prevJobs.filter((job) =>
+        targetKey ? jobDedupeKey(job) !== targetKey : job.id !== jobId
+      );
+      console.log(`🗑️ Removed job ${jobId} + duplicates from session (${prevJobs.length} → ${filtered.length})`);
       return filtered;
     });
   };
+
+  /**
+   * Deduped + ranked view of sessionJobs for the carousel. Collapses duplicate /
+   * staffing-reposted listings and floats the strongest matches first using the
+   * user's save/skip signals + profile. Recomputes when jobs stream in or
+   * signals/profile load.
+   */
+  const carouselJobs = useMemo(
+    () =>
+      dedupeAndRankJobs(sessionJobs, {
+        signals: jobSignals,
+        profile: userProfile,
+        limit: MAX_CAROUSEL_JOBS,
+      }),
+    [sessionJobs, jobSignals, userProfile]
+  );
 
   /**
    * Record a save/skip preference signal (Bet B). Fire-and-forget: a failed
@@ -295,6 +355,11 @@ export function ChatProvider({
    * Handle sending a message with intelligent routing between agents
    */
   const handleSendMessage = (messageText: string) => {
+    // A new user message begins a fresh search: arm the carousel so the next
+    // batch of displayed jobs REPLACES the previous results. Harmless on
+    // non-search messages (save/score produce no display to consume it).
+    pendingSearchResetRef.current = true;
+
     // Determine which agent to use based on intent
     const wantsScoring = detectScoringIntent(messageText);
 
@@ -343,6 +408,7 @@ export function ChatProvider({
     setActiveAgent,
     savedJobs,
     sessionJobs,
+    carouselJobs,
     userProfile,
     refreshSavedJobs,
     refreshUserProfile,
