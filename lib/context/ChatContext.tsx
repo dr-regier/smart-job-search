@@ -79,6 +79,12 @@ export function ChatProvider({
   const nextOrderRef = useRef(0);
   const processedToolCallsRef = useRef<Set<string>>(new Set());
 
+  // True when the next batch of displayed jobs should REPLACE the carousel (a
+  // new search began) rather than append to it. Set when a user message is sent;
+  // cleared by the first display of that turn so the agent's progressive batches
+  // still accumulate within the same search.
+  const pendingSearchResetRef = useRef(false);
+
   const supabase = createClient();
 
   // Load user session and data from Supabase on mount
@@ -202,15 +208,24 @@ export function ChatProvider({
           // Handle jobs discovery (action: "display")
           if (toolOutput.action === 'display' && toolOutput.jobs && Array.isArray(toolOutput.jobs)) {
             console.log(`🎯 Displaying ${toolOutput.jobs.length} jobs in carousel`);
-            // Add jobs to sessionJobs, deduplicating by ID
-            setSessionJobs((prevJobs) => {
-              const existingIds = new Set(prevJobs.map(j => j.id));
-              const newJobs = toolOutput.jobs.filter((job: Job) => !existingIds.has(job.id));
-              if (newJobs.length > 0) {
-                console.log(`   Added ${newJobs.length} new jobs (${prevJobs.length} → ${prevJobs.length + newJobs.length})`);
-              }
-              return [...prevJobs, ...newJobs];
-            });
+            if (pendingSearchResetRef.current) {
+              // First display of a new search: replace the previous results so a
+              // new search doesn't pile onto the last one's carousel.
+              pendingSearchResetRef.current = false;
+              console.log(`   🔄 New search - replacing carousel with ${toolOutput.jobs.length} jobs`);
+              setSessionJobs(toolOutput.jobs);
+            } else {
+              // Subsequent progressive batches within the same search: accumulate,
+              // deduplicating by ID.
+              setSessionJobs((prevJobs) => {
+                const existingIds = new Set(prevJobs.map(j => j.id));
+                const newJobs = toolOutput.jobs.filter((job: Job) => !existingIds.has(job.id));
+                if (newJobs.length > 0) {
+                  console.log(`   Added ${newJobs.length} new jobs (${prevJobs.length} → ${prevJobs.length + newJobs.length})`);
+                }
+                return [...prevJobs, ...newJobs];
+              });
+            }
             // Show carousel when jobs are discovered
             setCarouselVisible(true);
           }
@@ -340,6 +355,11 @@ export function ChatProvider({
    * Handle sending a message with intelligent routing between agents
    */
   const handleSendMessage = (messageText: string) => {
+    // A new user message begins a fresh search: arm the carousel so the next
+    // batch of displayed jobs REPLACES the previous results. Harmless on
+    // non-search messages (save/score produce no display to consume it).
+    pendingSearchResetRef.current = true;
+
     // Determine which agent to use based on intent
     const wantsScoring = detectScoringIntent(messageText);
 
