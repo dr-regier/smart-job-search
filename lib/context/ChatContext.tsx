@@ -1,11 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { createClient } from "@/lib/supabase/client";
 import type { Job } from "@/types/job";
 import type { UserProfile } from "@/types/profile";
+import type { JobSignal } from "@/lib/supabase/queries/job-signals";
+import { dedupeAndRankJobs, jobDedupeKey } from "@/lib/jobs/rank-jobs";
 
 interface ChatContextType {
   // Discovery Agent chat instance
@@ -20,7 +22,8 @@ interface ChatContextType {
 
   // Jobs and profile state
   savedJobs: Job[];
-  sessionJobs: Job[]; // Discovered jobs not yet saved (for carousel)
+  sessionJobs: Job[]; // Discovered jobs not yet saved (raw, for carousel)
+  carouselJobs: Job[]; // sessionJobs deduped + ranked for display
   userProfile: UserProfile | null;
   refreshSavedJobs: () => void;
   refreshUserProfile: () => void;
@@ -57,6 +60,7 @@ export function ChatProvider({
   const [savedJobs, setSavedJobs] = useState<Job[]>([]);
   const [sessionJobs, setSessionJobs] = useState<Job[]>([]); // Discovered jobs for carousel
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [jobSignals, setJobSignals] = useState<JobSignal[]>([]); // recent save/skip, for ranking
   const [activeAgent, setActiveAgent] = useState<'discovery' | 'matching'>('discovery');
   const [userId, setUserId] = useState<string | null>(null);
   const [carouselVisible, setCarouselVisible] = useState<boolean>(true); // Open by default
@@ -92,6 +96,17 @@ export function ChatProvider({
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
           setUserProfile(profileData.profile);
+        }
+
+        // Recent save/skip signals power the carousel dedup + ranking. Loaded
+        // once on mount (not live per-skip) so the queue stays stable during a
+        // review session; new skips influence the next session.
+        const signalsResponse = await fetch('/api/jobs/signal', {
+          credentials: 'include',
+        });
+        if (signalsResponse.ok) {
+          const signalsData = await signalsResponse.json();
+          setJobSignals(signalsData.signals || []);
         }
       }
     };
@@ -240,15 +255,32 @@ export function ChatProvider({
   };
 
   /**
-   * Remove a specific job from session jobs (when user saves it)
+   * Remove a job from session jobs (when user saves it). Group-aware: also drops
+   * any collapsed duplicates that share its dedup key, so saving the displayed
+   * representative doesn't let a sibling repost resurface in the carousel.
    */
   const removeJobFromSession = (jobId: string) => {
     setSessionJobs((prevJobs) => {
-      const filtered = prevJobs.filter(job => job.id !== jobId);
-      console.log(`🗑️ Removed job ${jobId} from session (${prevJobs.length} → ${filtered.length})`);
+      const target = prevJobs.find((job) => job.id === jobId);
+      const targetKey = target ? jobDedupeKey(target) : null;
+      const filtered = prevJobs.filter((job) =>
+        targetKey ? jobDedupeKey(job) !== targetKey : job.id !== jobId
+      );
+      console.log(`🗑️ Removed job ${jobId} + duplicates from session (${prevJobs.length} → ${filtered.length})`);
       return filtered;
     });
   };
+
+  /**
+   * Deduped + ranked view of sessionJobs for the carousel. Collapses duplicate /
+   * staffing-reposted listings and floats the strongest matches first using the
+   * user's save/skip signals + profile. Recomputes when jobs stream in or
+   * signals/profile load.
+   */
+  const carouselJobs = useMemo(
+    () => dedupeAndRankJobs(sessionJobs, { signals: jobSignals, profile: userProfile }),
+    [sessionJobs, jobSignals, userProfile]
+  );
 
   /**
    * Record a save/skip preference signal (Bet B). Fire-and-forget: a failed
@@ -343,6 +375,7 @@ export function ChatProvider({
     setActiveAgent,
     savedJobs,
     sessionJobs,
+    carouselJobs,
     userProfile,
     refreshSavedJobs,
     refreshUserProfile,

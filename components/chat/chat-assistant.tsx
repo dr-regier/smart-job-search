@@ -195,7 +195,7 @@ export default function ChatAssistant({}: ChatAssistantProps) {
     discoveryChat,
     matchingChat,
     activeAgent,
-    sessionJobs,
+    carouselJobs,
     clearSessionJobs,
     removeJobFromSession,
     logJobSignal,
@@ -579,7 +579,7 @@ export default function ChatAssistant({}: ChatAssistantProps) {
           {/* Desktop: Side panel (40% width) */}
           <div className="hidden lg:flex lg:w-[40%] border-l bg-background">
             <JobCarousel
-              jobs={sessionJobs}
+              jobs={carouselJobs}
               onJobSaved={handleJobSaved}
               onJobSkipped={handleJobSkipped}
               onComplete={handleCarouselComplete}
@@ -591,8 +591,9 @@ export default function ChatAssistant({}: ChatAssistantProps) {
           <div className="lg:hidden fixed inset-0 z-50 bg-black/50 animate-in fade-in">
             <div className="absolute inset-y-0 right-0 w-full sm:w-96 bg-background shadow-2xl animate-in slide-in-from-right">
               <JobCarousel
-                jobs={sessionJobs}
+                jobs={carouselJobs}
                 onJobSaved={handleJobSaved}
+                onJobSkipped={handleJobSkipped}
                 onComplete={handleCarouselComplete}
                 onClose={handleCarouselClose}
               />
@@ -610,7 +611,7 @@ export default function ChatAssistant({}: ChatAssistantProps) {
             className="shadow-lg bg-blue-600 hover:bg-blue-700 text-white gap-2"
           >
             <Briefcase className="w-5 h-5" />
-            {sessionJobs.length > 0 ? `View Discovered Jobs (${sessionJobs.length})` : 'Open Job Explorer'}
+            {carouselJobs.length > 0 ? `View Discovered Jobs (${carouselJobs.length})` : 'Open Job Explorer'}
           </Button>
         </div>
       )}
