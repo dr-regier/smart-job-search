@@ -57,12 +57,24 @@ export async function POST(request: NextRequest) {
     try {
       const mcpStart = Date.now();
       await firecrawlClient.connect();
-      firecrawlTools = await firecrawlClient.getTools();
+      const allFirecrawlTools = await firecrawlClient.getTools();
       console.log(
         `⏱️  MCP connect+getTools: ${Date.now() - mcpStart}ms (total ${elapsed()})`
       );
+
+      // Allowlist only the FAST Firecrawl tools the discovery prompt actually
+      // uses (scrape / search / map). The slow async tools - extract, crawl,
+      // deep-research - run ~18s/call; with stepCountIs the agent stacked
+      // several of them into 150s+ searches even though the prompt never asks
+      // for them. Dropping them from the toolset is deterministic: the agent
+      // falls back to the intended scrape -> parse -> displayJobs path.
+      const FAST_FIRECRAWL = /scrape|search|map/i;
+      firecrawlTools = Object.fromEntries(
+        Object.entries(allFirecrawlTools).filter(([name]) => FAST_FIRECRAWL.test(name))
+      );
+      const dropped = Object.keys(allFirecrawlTools).filter((n) => !FAST_FIRECRAWL.test(n));
       console.log(
-        `🔧 Job Discovery Agent has access to ${Object.keys(firecrawlTools).length} Firecrawl MCP tools`
+        `🔧 Job Discovery Agent: ${Object.keys(firecrawlTools).length} fast Firecrawl tools allowed [${Object.keys(firecrawlTools).join(", ")}]; dropped slow [${dropped.join(", ")}]`
       );
     } catch (error) {
       console.error("⚠️ Firecrawl unavailable, continuing without MCP tools:", error);
@@ -151,7 +163,7 @@ export async function POST(request: NextRequest) {
       system: `${JOB_DISCOVERY_SYSTEM_PROMPT}\n\n${userContext}`,
       messages: modelMessages,
       tools: allTools,
-      stopWhen: stepCountIs(10), // Allow up to 10 tool calls for discovery
+      stopWhen: stepCountIs(5), // Cap worst-case runtime (was 10; each step can be a multi-second scrape)
       providerOptions: {
         openai: {
           reasoning_effort: "minimal",
