@@ -159,7 +159,11 @@ export async function POST(request: NextRequest) {
     console.log(`⏱️  streamText starting (setup took ${elapsed()})`);
     let stepNum = 0;
     const result = streamText({
-      model: openai("gpt-5"),
+      // Discovery is latency-sensitive and not deep-reasoning work (pick a few
+      // queries, call Adzuna, brief reply). Timing showed ~22s of a 23s run was
+      // GPT-5 model time, tools <1s - so a faster mini tier is the lever. mini
+      // is OpenAI's agentic tool-calling tier; match/resume stay on gpt-5.
+      model: openai("gpt-5.4-mini"),
       system: `${JOB_DISCOVERY_SYSTEM_PROMPT}\n\n${userContext}`,
       messages: modelMessages,
       tools: allTools,
