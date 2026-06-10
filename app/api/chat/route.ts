@@ -16,6 +16,11 @@ import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
+  // ⏱️ Latency instrumentation (item 2b). Grep Vercel function logs for "⏱️"
+  // to see where a discovery search spends its time. t0 = request start.
+  const t0 = Date.now();
+  const elapsed = () => `${Date.now() - t0}ms`;
+
   try {
     // Get user from Supabase auth
     const supabase = await createClient();
@@ -40,7 +45,9 @@ export async function POST(request: NextRequest) {
     // Assemble user context (profile + saved jobs + master resume) so the agent
     // searches with situational awareness instead of running blind keyword
     // searches. See lib/agent/discovery-context.ts.
+    const ctxStart = Date.now();
     const userContext = await buildDiscoveryContext(supabase, user.id);
+    console.log(`⏱️  buildDiscoveryContext: ${Date.now() - ctxStart}ms (total ${elapsed()})`);
 
     // Initialize Firecrawl MCP client
     console.log("🚀 Initializing Firecrawl MCP client for Job Discovery Agent...");
@@ -48,8 +55,12 @@ export async function POST(request: NextRequest) {
     let firecrawlTools: Record<string, any> = {};
 
     try {
+      const mcpStart = Date.now();
       await firecrawlClient.connect();
       firecrawlTools = await firecrawlClient.getTools();
+      console.log(
+        `⏱️  MCP connect+getTools: ${Date.now() - mcpStart}ms (total ${elapsed()})`
+      );
       console.log(
         `🔧 Job Discovery Agent has access to ${Object.keys(firecrawlTools).length} Firecrawl MCP tools`
       );
@@ -65,9 +76,11 @@ export async function POST(request: NextRequest) {
         {
           ...toolDef,
           execute: async (args: any) => {
-            console.log(`\n🔧 Firecrawl Tool called: ${toolName}`);
+            console.log(`\n🔧 Firecrawl Tool called: ${toolName} (@ ${elapsed()})`);
             console.log(`   Input:`, JSON.stringify(args, null, 2));
+            const start = Date.now();
             const result = await toolDef.execute(args);
+            console.log(`   ⏱️  ${toolName}: ${Date.now() - start}ms (total ${elapsed()})`);
             console.log(`   Output:`, JSON.stringify(result, null, 2));
             return result;
           },
@@ -79,9 +92,11 @@ export async function POST(request: NextRequest) {
     const wrappedSearchAdzuna = {
       ...searchAdzunaJobs,
       execute: async (args: any) => {
-        console.log(`\n🔧 Custom Tool called: searchAdzunaJobs`);
+        console.log(`\n🔧 Custom Tool called: searchAdzunaJobs (@ ${elapsed()})`);
         console.log(`   Input:`, JSON.stringify(args, null, 2));
+        const start = Date.now();
         const result = await searchAdzunaJobs.execute(args);
+        console.log(`   ⏱️  searchAdzunaJobs: ${Date.now() - start}ms (total ${elapsed()})`);
         console.log(`   Output:`, JSON.stringify(result, null, 2));
         return result;
       },
@@ -92,11 +107,13 @@ export async function POST(request: NextRequest) {
     const wrappedSaveJobs = {
       ...saveJobsToProfile,
       execute: async (args: any) => {
-        console.log(`\n🔧 Custom Tool called: saveJobsToProfile`);
+        console.log(`\n🔧 Custom Tool called: saveJobsToProfile (@ ${elapsed()})`);
         console.log(`   Input:`, JSON.stringify(args, null, 2));
+        const start = Date.now();
         const result = await saveJobsToProfile.execute(args, {
           cookie: cookieHeader,
         });
+        console.log(`   ⏱️  saveJobsToProfile: ${Date.now() - start}ms (total ${elapsed()})`);
         console.log(`   Output:`, JSON.stringify(result, null, 2));
         return result;
       },
@@ -105,9 +122,11 @@ export async function POST(request: NextRequest) {
     const wrappedDisplayJobs = {
       ...displayJobs,
       execute: async (args: any) => {
-        console.log(`\n🔧 Custom Tool called: displayJobs`);
+        console.log(`\n🔧 Custom Tool called: displayJobs (@ ${elapsed()})`);
         console.log(`   Input:`, JSON.stringify(args, null, 2));
+        const start = Date.now();
         const result = await displayJobs.execute(args);
+        console.log(`   ⏱️  displayJobs: ${Date.now() - start}ms (total ${elapsed()})`);
         console.log(`   Output:`, JSON.stringify(result, null, 2));
         return result;
       },
@@ -125,6 +144,8 @@ export async function POST(request: NextRequest) {
       `✅ Total tools available: ${Object.keys(allTools).length} (${Object.keys(firecrawlTools).length} Firecrawl + 3 custom)`
     );
 
+    console.log(`⏱️  streamText starting (setup took ${elapsed()})`);
+    let stepNum = 0;
     const result = streamText({
       model: openai("gpt-5"),
       system: `${JOB_DISCOVERY_SYSTEM_PROMPT}\n\n${userContext}`,
@@ -136,6 +157,20 @@ export async function POST(request: NextRequest) {
           reasoning_effort: "minimal",
           textVerbosity: "low",
         },
+      },
+      // ⏱️ Per-step boundary: shows how long the model "thinks" between tool
+      // calls and when the first result-bearing step lands (time-to-first-paint).
+      onStepFinish: ({ toolCalls, usage }) => {
+        stepNum += 1;
+        const tools = toolCalls?.map((c) => c.toolName).join(", ") || "(text only)";
+        console.log(`⏱️  step ${stepNum} done @ ${elapsed()} - tools: ${tools}`);
+      },
+      // ⏱️ Whole-run total + token usage (usage was previously discarded;
+      // capturing it also serves the observability item in the plan).
+      onFinish: ({ usage, finishReason }) => {
+        console.log(
+          `⏱️  TOTAL discovery run: ${elapsed()} | steps: ${stepNum} | finish: ${finishReason} | usage: ${JSON.stringify(usage)}`
+        );
       },
     });
 
