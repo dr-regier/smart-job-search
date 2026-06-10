@@ -81,16 +81,34 @@ interface ChatAssistantProps {
  * Helper function to get display info for tool calls based on agent and tool name
  */
 const getToolDisplayInfo = (toolName: string, agentSource: 'discovery' | 'matching') => {
+  // Saving is shared across agents and unambiguous.
+  if (toolName.includes('saveJobs')) {
+    return { icon: '💾', text: 'Saving jobs' };
+  }
+
   if (agentSource === 'discovery') {
-    // Save jobs tool gets special treatment
-    if (toolName.includes('saveJobs')) {
-      return { icon: '💾', text: 'Saving jobs' };
+    // Narrate the actual step instead of a single generic "Searching" so a long
+    // wait reads as progress. Firecrawl MCP tools arrive as dynamic `firecrawl_*`
+    // names; the custom tools are `searchAdzunaJobs` / `displayJobs`.
+    if (toolName.includes('Adzuna') || toolName.includes('adzuna')) {
+      return { icon: '🔍', text: 'Searching job boards' };
     }
-    // All other discovery tools (adzuna, firecrawl, displayJobs) are search tools
+    if (toolName.includes('displayJobs')) {
+      return { icon: '📋', text: 'Preparing results' };
+    }
+    if (toolName.includes('firecrawl') || toolName.includes('scrape') || toolName.includes('crawl')) {
+      return { icon: '🌐', text: 'Reading company pages' };
+    }
+    if (toolName.includes('search')) {
+      return { icon: '🌐', text: 'Searching the web' };
+    }
     return { icon: '🔍', text: 'Searching for jobs' };
   }
 
-  // Matching agent - all tools are scoring
+  // Matching agent - reading pages vs. scoring.
+  if (toolName.includes('firecrawl') || toolName.includes('scrape') || toolName.includes('search')) {
+    return { icon: '🌐', text: 'Researching the role' };
+  }
   return { icon: '📊', text: 'Scoring jobs' };
 };
 
@@ -157,6 +175,22 @@ const AgentToolIndicator = memo(({
 });
 
 AgentToolIndicator.displayName = 'AgentToolIndicator';
+
+/**
+ * Generic "agent is working" indicator. Fills the silent gaps where no tool is
+ * actively running and no assistant text is streaming yet (e.g. the wait before
+ * the first tool call, or between a finished tool and the next step) - so a long
+ * search reads as alive rather than stuck. Pairs with AgentToolIndicator, which
+ * covers the moments a specific tool is running.
+ */
+const AgentThinkingIndicator = memo(() => (
+  <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg border">
+    <span className="text-base">💭</span>
+    <span className="animate-pulse">Thinking...</span>
+  </div>
+));
+
+AgentThinkingIndicator.displayName = 'AgentThinkingIndicator';
 
 const MemoizedMessage = memo(({
   message,
@@ -438,7 +472,7 @@ export default function ChatAssistant({}: ChatAssistantProps) {
                 console.error(`🚨 Duplicate keys found:`, duplicateIds);
               }
 
-              return flowItems.map((item, itemIndex) => {
+              const renderedItems = flowItems.map((item, itemIndex) => {
                 if (item.type === 'tool-call') {
                   // Render agent-specific tool indicator
                   const toolPart = item.data as RAGToolUIPart;
@@ -517,6 +551,28 @@ export default function ChatAssistant({}: ChatAssistantProps) {
                   );
                 }
               });
+
+              // Show a generic working state when streaming but nothing is
+              // actively narrating progress: no tool currently running and no
+              // assistant text streaming yet (the initial wait, or the beat
+              // between a finished tool and the next step).
+              const lastItem = flowItems[flowItems.length - 1];
+              const lastIsActiveTool = lastItem?.type === 'tool-call' &&
+                (lastItem.data?.state === 'input-streaming' || lastItem.data?.state === 'input-available');
+              const lastIsAssistantText = lastItem?.type === 'message' &&
+                lastItem.data?.role === 'assistant';
+              const showThinking = isLoading && !lastIsActiveTool && !lastIsAssistantText;
+
+              return (
+                <>
+                  {renderedItems}
+                  {showThinking && (
+                    <div className="w-full mb-3">
+                      <AgentThinkingIndicator />
+                    </div>
+                  )}
+                </>
+              );
             })()
           )}
         </ConversationContent>
