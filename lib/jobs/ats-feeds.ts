@@ -101,6 +101,41 @@ function extractRequirements(descriptionText: string): string[] {
   return requirements;
 }
 
+/** Normalize an employment-type token into a clean label (Ashby sends "FullTime"). */
+function humanizeEmploymentType(raw: string | undefined | null): string | undefined {
+  if (!raw) return undefined;
+  const map: Record<string, string> = {
+    fulltime: "Full-time",
+    parttime: "Part-time",
+    contract: "Contract",
+    intern: "Intern",
+    internship: "Internship",
+    temporary: "Temporary",
+    permanent: "Full-time",
+  };
+  const key = raw.replace(/[\s_-]/g, "").toLowerCase();
+  if (map[key]) return map[key];
+  // Fallback: split camelCase / snake / kebab into Title Case words.
+  const words = raw
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Normalize a workplace-type token (Lever/Ashby send "hybrid", "remote", "onsite"). */
+function humanizeWorkplaceType(raw: string | undefined | null): string | undefined {
+  if (!raw) return undefined;
+  const key = raw.replace(/[\s_-]/g, "").toLowerCase();
+  const map: Record<string, string> = {
+    remote: "Remote",
+    hybrid: "Hybrid",
+    onsite: "On-site",
+    inperson: "On-site",
+  };
+  return map[key];
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -131,6 +166,7 @@ interface GreenhouseJob {
   location?: { name?: string };
   content?: string;
   company_name?: string;
+  departments?: Array<{ name?: string }>;
 }
 interface GreenhouseResponse {
   jobs?: GreenhouseJob[];
@@ -144,6 +180,8 @@ async function fetchGreenhouse(company: string): Promise<Job[]> {
   const fallbackName = prettifyCompany(company);
   return (data.jobs ?? []).map((j) => {
     const description = capDescription(htmlToText(j.content));
+    // Greenhouse exposes department but no employment-type or compensation field.
+    const department = j.departments?.find((d) => d.name)?.name;
     return {
       id: uuidv4(),
       title: j.title,
@@ -154,6 +192,7 @@ async function fetchGreenhouse(company: string): Promise<Job[]> {
       url: j.absolute_url,
       source: "greenhouse" as const,
       discoveredAt: new Date().toISOString(),
+      ...(department ? { department } : {}),
     };
   });
 }
@@ -163,11 +202,46 @@ async function fetchGreenhouse(company: string): Promise<Job[]> {
 interface LeverJob {
   id: string;
   text: string;
-  categories?: { location?: string; team?: string; commitment?: string };
+  categories?: {
+    location?: string;
+    team?: string;
+    department?: string;
+    commitment?: string;
+  };
+  workplaceType?: string;
+  salaryRange?: { min?: number; max?: number; currency?: string };
   descriptionPlain?: string;
   description?: string;
   hostedUrl?: string;
   applyUrl?: string;
+}
+
+/** Map a currency code to a symbol; fall back to a trailing code (e.g. "120K CHF"). */
+function currencySymbol(code: string | undefined): { symbol: string; suffix: string } {
+  const symbols: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", CAD: "$", AUD: "$" };
+  const upper = (code || "USD").toUpperCase();
+  return symbols[upper]
+    ? { symbol: symbols[upper], suffix: "" }
+    : { symbol: "", suffix: ` ${upper}` };
+}
+
+/** Compact a salary figure: 120000 → "120K", 1500 → "1.5K". */
+function compactAmount(n: number): string {
+  if (n >= 1000) {
+    const k = n / 1000;
+    return `${Number.isInteger(k) ? k : k.toFixed(1)}K`;
+  }
+  return `${n}`;
+}
+
+/** Format a Lever salaryRange into a badge string, or undefined when absent. */
+function formatLeverSalary(range: LeverJob["salaryRange"]): string | undefined {
+  if (!range || (range.min == null && range.max == null)) return undefined;
+  const { symbol, suffix } = currencySymbol(range.currency);
+  const lo = range.min != null ? `${symbol}${compactAmount(range.min)}` : undefined;
+  const hi = range.max != null ? `${symbol}${compactAmount(range.max)}` : undefined;
+  const body = lo && hi ? `${lo} – ${hi}` : lo || hi;
+  return `${body}${suffix}`;
 }
 
 async function fetchLever(company: string): Promise<Job[]> {
@@ -178,6 +252,10 @@ async function fetchLever(company: string): Promise<Job[]> {
   const companyName = prettifyCompany(company);
   return (Array.isArray(data) ? data : []).map((j) => {
     const description = capDescription(j.descriptionPlain || htmlToText(j.description));
+    const department = j.categories?.department;
+    const employmentType = humanizeEmploymentType(j.categories?.commitment);
+    const workplaceType = humanizeWorkplaceType(j.workplaceType);
+    const salary = formatLeverSalary(j.salaryRange);
     return {
       id: uuidv4(),
       title: j.text,
@@ -188,6 +266,10 @@ async function fetchLever(company: string): Promise<Job[]> {
       url: j.hostedUrl || j.applyUrl || "",
       source: "lever" as const,
       discoveredAt: new Date().toISOString(),
+      ...(department ? { department } : {}),
+      ...(employmentType ? { employmentType } : {}),
+      ...(workplaceType ? { workplaceType } : {}),
+      ...(salary ? { salary } : {}),
     };
   });
 }
@@ -198,6 +280,14 @@ interface AshbyJob {
   id: string;
   title: string;
   location?: string;
+  department?: string;
+  employmentType?: string;
+  workplaceType?: string;
+  isRemote?: boolean;
+  compensation?: {
+    compensationTierSummary?: string;
+    scrapeableCompensationSalarySummary?: string;
+  };
   descriptionPlain?: string;
   descriptionHtml?: string;
   jobUrl?: string;
@@ -215,6 +305,15 @@ async function fetchAshby(company: string): Promise<Job[]> {
   const companyName = prettifyCompany(company);
   return (data.jobs ?? []).map((j) => {
     const description = capDescription(j.descriptionPlain || htmlToText(j.descriptionHtml));
+    const department = j.department;
+    const employmentType = humanizeEmploymentType(j.employmentType);
+    const workplaceType =
+      humanizeWorkplaceType(j.workplaceType) ?? (j.isRemote ? "Remote" : undefined);
+    // Prefer the tier summary (includes equity/bonus); fall back to the plain range.
+    const salary =
+      j.compensation?.compensationTierSummary ||
+      j.compensation?.scrapeableCompensationSalarySummary ||
+      undefined;
     return {
       id: uuidv4(),
       title: j.title,
@@ -225,6 +324,10 @@ async function fetchAshby(company: string): Promise<Job[]> {
       url: j.jobUrl || j.applyUrl || "",
       source: "ashby" as const,
       discoveredAt: new Date().toISOString(),
+      ...(department ? { department } : {}),
+      ...(employmentType ? { employmentType } : {}),
+      ...(workplaceType ? { workplaceType } : {}),
+      ...(salary ? { salary } : {}),
     };
   });
 }

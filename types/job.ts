@@ -35,6 +35,17 @@ export interface Job {
   /** ISO timestamp when job was discovered */
   discoveredAt: string;
 
+  // --- Structured attributes (populated from ATS feeds; optional elsewhere) ---
+
+  /** Department / org the role sits in (e.g. "Engineering", "Finance"). */
+  department?: string;
+
+  /** Employment type (e.g. "Full-time", "Contract", "Intern"). */
+  employmentType?: string;
+
+  /** Workplace arrangement (e.g. "Remote", "Hybrid", "On-site"). */
+  workplaceType?: string;
+
   // --- Scoring Data (added by Job Matching Agent) ---
 
   /** Overall job fit score (0-100) */

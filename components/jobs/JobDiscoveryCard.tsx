@@ -6,7 +6,17 @@ import type { Job } from "@/types/job";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, MapPin, DollarSign, BadgeCheck, ExternalLink } from "lucide-react";
+import {
+  Check,
+  X,
+  MapPin,
+  DollarSign,
+  BadgeCheck,
+  ExternalLink,
+  Building2,
+  Clock,
+  Laptop,
+} from "lucide-react";
 import { CompanyAvatar } from "./CompanyAvatar";
 import {
   isAtsSource,
@@ -98,14 +108,35 @@ export function JobDiscoveryCard({ job, onSave, onSkip, isSaving = false }: JobD
           <h2 className="text-2xl font-bold mb-1 leading-tight">{job.title}</h2>
         )}
 
-        {/* Badges for location, salary */}
+        {/* Attribute row: location, workplace, employment type, department, salary */}
         <div className="flex flex-wrap gap-2 mb-4">
           <Badge variant="secondary" className="flex items-center gap-1">
             <MapPin className="w-3 h-3" />
             {job.location}
           </Badge>
-          {job.salary && (
+          {job.workplaceType && (
             <Badge variant="secondary" className="flex items-center gap-1">
+              <Laptop className="w-3 h-3" />
+              {job.workplaceType}
+            </Badge>
+          )}
+          {job.employmentType && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {job.employmentType}
+            </Badge>
+          )}
+          {job.department && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <Building2 className="w-3 h-3" />
+              {job.department}
+            </Badge>
+          )}
+          {job.salary && (
+            <Badge
+              variant="secondary"
+              className="flex items-center gap-1 bg-green-100 text-green-800 hover:bg-green-100"
+            >
               <DollarSign className="w-3 h-3" />
               {job.salary}
             </Badge>
@@ -126,25 +157,6 @@ export function JobDiscoveryCard({ job, onSave, onSkip, isSaving = false }: JobD
             </button>
           )}
         </div>
-
-        {/* Requirements tags */}
-        {job.requirements.length > 0 && (
-          <div className="mb-6">
-            <p className="text-sm font-semibold mb-2">Key Requirements:</p>
-            <div className="flex flex-wrap gap-2">
-              {job.requirements.slice(0, 5).map((req, i) => (
-                <Badge key={i} variant="outline" className="text-xs">
-                  {req}
-                </Badge>
-              ))}
-              {job.requirements.length > 5 && (
-                <Badge variant="outline" className="text-xs font-semibold">
-                  +{job.requirements.length - 5} more
-                </Badge>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Action buttons - Save / Skip stay the primary triage actions */}
         <div className="flex gap-2">
