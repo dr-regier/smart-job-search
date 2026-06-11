@@ -7,7 +7,7 @@
  */
 
 import { JOB_DISCOVERY_SYSTEM_PROMPT } from "@/components/agent/prompts";
-import { searchAdzunaJobs, saveJobsToProfile, displayJobs } from "@/components/agent/tools";
+import { searchAdzunaJobs, searchAtsJobs, saveJobsToProfile, displayJobs } from "@/components/agent/tools";
 import { getFirecrawlMCPClient } from "@/lib/mcp";
 import { buildDiscoveryContext } from "@/lib/agent/discovery-context";
 import { createClient } from "@/lib/supabase/server";
@@ -99,6 +99,17 @@ export async function POST(request: NextRequest) {
       },
     };
 
+    const wrappedSearchAts = {
+      ...searchAtsJobs,
+      execute: async (args: any) => {
+        console.log(`\n🔧 Custom Tool called: searchAtsJobs`);
+        console.log(`   Input:`, JSON.stringify(args, null, 2));
+        const result = await searchAtsJobs.execute(args);
+        console.log(`   Output:`, JSON.stringify(result, null, 2));
+        return result;
+      },
+    };
+
     const cookieHeader = request.headers.get("cookie") ?? undefined;
 
     const wrappedSaveJobs = {
@@ -129,12 +140,13 @@ export async function POST(request: NextRequest) {
     const allTools = {
       ...wrappedFirecrawlTools,
       searchAdzunaJobs: wrappedSearchAdzuna,
+      searchAtsJobs: wrappedSearchAts,
       saveJobsToProfile: wrappedSaveJobs,
       displayJobs: wrappedDisplayJobs,
     };
 
     console.log(
-      `✅ Total tools available: ${Object.keys(allTools).length} (${Object.keys(firecrawlTools).length} Firecrawl + 3 custom)`
+      `✅ Total tools available: ${Object.keys(allTools).length} (${Object.keys(firecrawlTools).length} Firecrawl + 4 custom)`
     );
 
     const result = streamText({

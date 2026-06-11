@@ -30,7 +30,7 @@ export interface Job {
   url: string;
 
   /** Source of job discovery */
-  source: "firecrawl" | "adzuna" | "manual";
+  source: "firecrawl" | "adzuna" | "manual" | "greenhouse" | "lever" | "ashby";
 
   /** ISO timestamp when job was discovered */
   discoveredAt: string;

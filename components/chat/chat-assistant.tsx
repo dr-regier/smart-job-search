@@ -93,6 +93,9 @@ const getToolDisplayInfo = (toolName: string, agentSource: 'discovery' | 'matchi
     if (toolName.includes('Adzuna') || toolName.includes('adzuna')) {
       return { icon: '🔍', text: 'Searching job boards' };
     }
+    if (toolName.includes('Ats') || toolName.includes('ats')) {
+      return { icon: '🏢', text: 'Checking company boards' };
+    }
     if (toolName.includes('displayJobs')) {
       return { icon: '📋', text: 'Preparing results' };
     }
