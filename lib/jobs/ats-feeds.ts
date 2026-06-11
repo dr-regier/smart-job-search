@@ -46,6 +46,21 @@ export interface AtsFetchResult {
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * Cap on stored description length. Unlike Adzuna (which returns pre-truncated
+ * snippets), ATS feeds return the FULL posting - some run 5-6k words. The
+ * carousel only shows a preview, and every displayed job's description is fed
+ * back to the discovery model as the tool result; a dozen full postings is
+ * ~120k tokens, which blows the model's per-minute token budget. ~1500 chars
+ * is a useful preview and keeps a 25-job batch well within budget.
+ */
+const DESCRIPTION_CHAR_CAP = 1500;
+
+function capDescription(text: string): string {
+  if (text.length <= DESCRIPTION_CHAR_CAP) return text;
+  return text.slice(0, DESCRIPTION_CHAR_CAP).trimEnd() + "…";
+}
+
 /** Turn a board slug ("my-company_inc") into a display name ("My Company Inc"). */
 function prettifyCompany(slug: string): string {
   return slug
@@ -128,7 +143,7 @@ async function fetchGreenhouse(company: string): Promise<Job[]> {
   const data = await fetchJson<GreenhouseResponse>(url);
   const fallbackName = prettifyCompany(company);
   return (data.jobs ?? []).map((j) => {
-    const description = htmlToText(j.content);
+    const description = capDescription(htmlToText(j.content));
     return {
       id: uuidv4(),
       title: j.title,
@@ -162,7 +177,7 @@ async function fetchLever(company: string): Promise<Job[]> {
   const data = await fetchJson<LeverJob[]>(url);
   const companyName = prettifyCompany(company);
   return (Array.isArray(data) ? data : []).map((j) => {
-    const description = j.descriptionPlain || htmlToText(j.description);
+    const description = capDescription(j.descriptionPlain || htmlToText(j.description));
     return {
       id: uuidv4(),
       title: j.text,
@@ -199,7 +214,7 @@ async function fetchAshby(company: string): Promise<Job[]> {
   const data = await fetchJson<AshbyResponse>(url);
   const companyName = prettifyCompany(company);
   return (data.jobs ?? []).map((j) => {
-    const description = j.descriptionPlain || htmlToText(j.descriptionHtml);
+    const description = capDescription(j.descriptionPlain || htmlToText(j.descriptionHtml));
     return {
       id: uuidv4(),
       title: j.title,
