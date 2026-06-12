@@ -81,6 +81,9 @@ Firecrawl MCP failures are caught and agents continue without MCP tools.
 **Matching Agent** (`/api/match`, prompt `job-matching-prompt.ts`)
 - Tools: Firecrawl MCP, web search, scoreJobs. Weighted scoring, gap identification, priority.
 - Accepts jobs/profile from request body OR fetches from Supabase. Full chat history passed in for context-aware scoring.
+- **Triggered ONLY from the jobs dashboard** (`ScoreJobsDialog` / `app/jobs/page.tsx`
+  call `/api/match` directly with the selected jobs + profile). The chat surface does
+  NOT route here - see Chat Architecture → Routing.
 
 **Resume Agent** (`/api/resume`, prompt `resume-generator-prompt.ts`)
 - Tools: Firecrawl MCP, web search, generateTailoredResume. GPT-5 `reasoning_effort: 'medium'`, 5-step loop (`stepCountIs(5)`).
@@ -89,21 +92,25 @@ Firecrawl MCP failures are caught and agents continue without MCP tools.
 ### Chat Architecture
 
 **`ChatContext`** (`lib/context/ChatContext.tsx`) is global state, wrapping the app
-in `app/layout.tsx` so chat persists across navigation. It hosts both `useChat`
-hooks (Discovery + Matching) at context level.
+in `app/layout.tsx` so chat persists across navigation. It hosts the Discovery
+`useChat` hook at context level (chat is discovery-only - the Matching Agent is the
+jobs dashboard's, not chat's; see Routing below).
 
-- Manages savedJobs, userProfile, activeAgent, sessionJobs, carouselVisible; data from Supabase (not localStorage).
+- Manages savedJobs, userProfile, sessionJobs, carouselVisible; data from Supabase (not localStorage).
 - **Carousel pipeline (PR #7):** loads save/skip signals on mount and exposes a deduped + ranked `carouselJobs` memo via `dedupeAndRankJobs`, capped at `MAX_CAROUSEL_JOBS = 25` best-first. The carousel + count label consume `carouselJobs`, not raw `sessionJobs`. Ranking is from mount-loaded signals - NOT re-ranked live per skip.
 - **Replace-on-new-search (PR #7):** each user message arms `pendingSearchResetRef`; the display handler replaces `sessionJobs` on the first `displayJobs` batch of a turn, then appends the rest (no empty flash mid-search; a zero-result search leaves prior results up).
 - **Preference signals (Bet B):** explicit Skip button / Esc → `skipped`, save → `saved`; both fire-and-forget via `logJobSignal()` (POST `/api/jobs/signal`; failures never break carousel UX). Plain Prev/Next does NOT count as a skip.
 - `removeJobFromSession()` is group-aware: saving a deduped group's representative drops its collapsed siblings so they don't resurface.
 - `clearChat()` resets the conversation while preserving jobs + profile.
 
-**Routing:** keyword intent detection in the chat client routes to the Matching
-Agent (`score`, `analyze`, `match`, `fit`, `rate`, `evaluate`, `assess`, `rank`,
-`priority`, `compare`); checks for saved jobs + profile first. Messages from both
-agents are merged chronologically via `useMemo`. Tool execution surfaces as
-friendly indicators (🔍 searching, 💾 saving, 📊 scoring), not raw tool names.
+**Routing:** chat is **discovery-only** - every message goes to the Discovery Agent
+(`/api/chat`). Scoring/matching is NOT a chat capability; it lives in the jobs
+dashboard, where `ScoreJobsDialog` hits `/api/match` directly. (Earlier a keyword
+intent-detector routed chat to the Matching Agent on words like "match"/"score" -
+removed 2026-06-12: a "find me jobs at OpenAI that match my profile" request matched
+on "match" and hit the Matching Agent, which has no sourcing tools and is slow.)
+Tool execution surfaces as friendly indicators (🔍 searching, 💾 saving), not raw
+tool names.
 
 **Voice input:** `useVoiceRecording` (MediaRecorder, ≤10s) → ElevenLabs `scribe_v1`
 → transcript populates the input for review before send.
