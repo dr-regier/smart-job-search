@@ -93,6 +93,9 @@ const getToolDisplayInfo = (toolName: string, agentSource: 'discovery' | 'matchi
     if (toolName.includes('Adzuna') || toolName.includes('adzuna')) {
       return { icon: '🔍', text: 'Searching job boards' };
     }
+    if (toolName.includes('Ats') || toolName.includes('ats')) {
+      return { icon: '🏢', text: 'Checking company boards' };
+    }
     if (toolName.includes('displayJobs')) {
       return { icon: '📋', text: 'Preparing results' };
     }
@@ -227,8 +230,6 @@ export default function ChatAssistant({}: ChatAssistantProps) {
   // Get all chat state and methods from context
   const {
     discoveryChat,
-    matchingChat,
-    activeAgent,
     carouselJobs,
     clearSessionJobs,
     removeJobFromSession,
@@ -242,34 +243,28 @@ export default function ChatAssistant({}: ChatAssistantProps) {
     clearChat,
   } = useChatContext();
 
-  // Merge messages from both agents chronologically
+  // Chat is discovery-only. Tag messages with agentSource so the tool-label
+  // helper keeps working, and assign stable insertion order for rendering.
   const allRawMessages = React.useMemo(() => {
     const discovery = discoveryChat.messages.map(msg => ({
       ...msg,
       agentSource: 'discovery' as const
     }));
-    const matching = matchingChat.messages.map(msg => ({
-      ...msg,
-      agentSource: 'matching' as const
-    }));
 
-    // Assign order numbers to new messages
-    [...discovery, ...matching].forEach(msg => {
+    discovery.forEach(msg => {
       if (!messageOrderRef.current.has(msg.id)) {
         messageOrderRef.current.set(msg.id, nextOrderRef.current++);
       }
     });
 
-    // Combine and sort by insertion order
-    return [...discovery, ...matching].sort((a, b) => {
+    return discovery.sort((a, b) => {
       const orderA = messageOrderRef.current.get(a.id) ?? 0;
       const orderB = messageOrderRef.current.get(b.id) ?? 0;
       return orderA - orderB;
     });
-  }, [discoveryChat.messages, matchingChat.messages, messageOrderRef, nextOrderRef]);
+  }, [discoveryChat.messages, messageOrderRef, nextOrderRef]);
 
-  // Status is from whichever agent is currently active
-  const status = activeAgent === 'matching' ? matchingChat.status : discoveryChat.status;
+  const status = discoveryChat.status;
 
   // Debounced messages for performance - update every 30ms instead of every token
   const [debouncedMessages, setDebouncedMessages] = useState(allRawMessages);
